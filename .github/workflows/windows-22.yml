@@ -1,50 +1,51 @@
-name: Install and Configure VNC Server on Windows VPS
+name: Enable RDP on Windows VPS
 
 on:
   workflow_dispatch:
 
 jobs:
-  install-configure-vnc:
+  enable-rdp:
     runs-on: windows-2022
 
     steps:
     - name: Checkout repository
       uses: actions/checkout@v3
 
-    - name: Set variables
+    - name: Set user password
       run: |
-        echo "VNC_URL=https://github.com/RealVNC/raspi-preview/releases/download/v0.0.1/VNC-Server-6.11.1-Windows.exe" >> $GITHUB_ENV
-        echo "VNC_FILE=$env:USERPROFILE\\vnc.exe" >> $GITHUB_ENV
-        echo "VNC_PASSWORD=YourStrongPassword" >> $GITHUB_ENV
+        $Username = "Administrator"
+        $Password = "YourStrongPassword"
+        $SecurePassword = ConvertTo-SecureString $Password -AsPlainText -Force
+        $User = Get-LocalUser -Name $Username
+        if ($User) {
+            Write-Host "Updating password for $Username"
+            $User | Set-LocalUser -Password $SecurePassword
+        } else {
+            Write-Host "User $Username not found. Creating user..."
+            New-LocalUser -Name $Username -Password $SecurePassword -FullName "Admin User" -Description "RDP User"
+        }
       shell: powershell
 
-    - name: Download VNC Server
+    - name: Enable RDP
       run: |
-        Write-Host "Downloading VNC Server..."
-        Invoke-WebRequest -Uri $env:VNC_URL -OutFile $env:VNC_FILE -UseBasicParsing -MaximumRedirection 10
-        if (-not (Test-Path $env:VNC_FILE)) { throw "Failed to download VNC Server." }
-        Write-Host "Download completed: $env:VNC_FILE"
+        Write-Host "Enabling RDP..."
+        Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server" -Name "fDenyTSConnections" -Value 0
+        Write-Host "RDP enabled."
       shell: powershell
 
-    - name: Install VNC Server silently
+    - name: Allow RDP in firewall
       run: |
-        Write-Host "Installing VNC Server silently..."
-        Start-Process -FilePath $env:VNC_FILE -ArgumentList "/quiet /norestart" -Wait
-        Write-Host "Installation completed."
+        Write-Host "Opening firewall for RDP..."
+        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+        Write-Host "Firewall configured."
       shell: powershell
 
-    - name: Set VNC Password
+    - name: Confirm RDP status
       run: |
-        Write-Host "Configuring VNC password..."
-        # Enable password authentication
-        & "C:\Program Files\RealVNC\VNC Server\vncpasswd.exe" -service -setpassword $env:VNC_PASSWORD
-        Write-Host "VNC password set successfully."
-      shell: powershell
-
-    - name: Enable VNC Server service
-      run: |
-        Write-Host "Starting VNC Server service..."
-        Start-Service -Name "VNCServer"
-        Set-Service -Name "VNCServer" -StartupType Automatic
-        Write-Host "VNC Server service is running."
+        $RDPStatus = Get-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server" -Name "fDenyTSConnections"
+        if ($RDPStatus.fDenyTSConnections -eq 0) {
+            Write-Host "RDP is enabled."
+        } else {
+            throw "RDP not enabled."
+        }
       shell: powershell
