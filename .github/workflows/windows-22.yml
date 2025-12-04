@@ -1,4 +1,4 @@
-name: Windows 2022 VNC Desktop
+name: Windows 2022 VNC Desktop FIXED
 
 on:
   workflow_dispatch:
@@ -8,33 +8,34 @@ jobs:
     runs-on: windows-2022
 
     steps:
-    - name: Install TightVNC
+    - name: Download VNC (REALVNC)
       shell: powershell
       run: |
-        Invoke-WebRequest -Uri "https://download.tigervnc.org/tigervnc/stable/1.13.1/windows/tigervnc-1.13.1.exe" -OutFile "$env:USERPROFILE\vnc.exe"
-        Start-Process "$env:USERPROFILE\vnc.exe" -ArgumentList "/S" -Wait
+        Invoke-WebRequest -Uri "https://github.com/RealVNC/raspi-preview/releases/download/v0.0.1/VNC-Server-6.11.1-Windows.exe" -OutFile "$env:USERPROFILE\vnc.exe"
 
-    - name: Set VNC password
+    - name: Install VNC
       shell: powershell
       run: |
-        $password = "123456"
-        $hex = ([System.Text.Encoding]::ASCII.GetBytes($password) | ForEach-Object { "{0:X2}" -f $_ }) -join ""
-        Set-Content -Path "C:\Program Files\TigerVNC\vncpasswd.txt" -Value $hex
+        Start-Process "$env:USERPROFILE\vnc.exe" -ArgumentList "/silent" -Wait
 
-    - name: Start VNC server
+    - name: Enable VNC service
       shell: powershell
       run: |
-        Start-Process "C:\Program Files\TigerVNC\winvnc.exe"
-        Start-Sleep -Seconds 5
+        & "C:\Program Files\RealVNC\VNC Server\vncserver.exe" -service install
+        & "C:\Program Files\RealVNC\VNC Server\vncserver.exe" -service start
+
+    - name: Set password
+      shell: powershell
+      run: |
+        $pass = "123456"
+        & "C:\Program Files\RealVNC\VNC Server\vncpasswd.exe" -set $pass
 
     - name: Show Connection Info
       shell: powershell
       run: |
         $ip = (Invoke-WebRequest -uri "https://api.ipify.org").Content
         Write-Host "===================================="
-        Write-Host " VNC READY!"
-        Write-Host " Connect using VNC Viewer"
-        Write-Host ""
+        Write-Host " VNC CONNECT INFO"
         Write-Host " IP        : $ip"
         Write-Host " PORT      : 5900"
         Write-Host " PASSWORD  : 123456"
