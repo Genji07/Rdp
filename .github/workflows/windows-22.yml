@@ -1,78 +1,25 @@
-# ============================
-# CONFIGURATION
-# ============================
-$RDPUser = "Administrator"           # Username untuk RDP
-$RDPPassword = "YourStrongPassword"  # Password untuk RDP
-$VNCURL = "https://github.com/RealVNC/raspi-preview/releases/download/v0.0.1/VNC-Server-6.11.1-Windows.exe"
-$VNCFile = "$env:USERPROFILE\vnc.exe"
-$VNCPassword = "YourVNCPassword"
+name: CI
 
-# ============================
-# 1. ENABLE RDP
-# ============================
-Write-Host "==> Configuring RDP..."
-# Set user password
-$SecurePassword = ConvertTo-SecureString $RDPPassword -AsPlainText -Force
-$User = Get-LocalUser -Name $RDPUser -ErrorAction SilentlyContinue
-if ($User) {
-    Write-Host "Updating password for $RDPUser..."
-    $User | Set-LocalUser -Password $SecurePassword
-} else {
-    Write-Host "Creating user $RDPUser..."
-    New-LocalUser -Name $RDPUser -Password $SecurePassword -FullName "RDP User" -Description "RDP User Account"
-}
+on: [push, workflow_dispatch]
 
-# Enable RDP
-Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server" -Name "fDenyTSConnections" -Value 0
-# Allow RDP in firewall
-Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-Write-Host "RDP enabled. You can connect using $RDPUser and your password."
+jobs:
+  build:
 
-# ============================
-# 2. DOWNLOAD VNC SERVER
-# ============================
-Write-Host "==> Downloading VNC Server..."
-$maxRetries = 5
-$retry = 0
-$success = $false
-while (-not $success -and $retry -lt $maxRetries) {
-    try {
-        Invoke-WebRequest -Uri $VNCURL -OutFile $VNCFile -UseBasicParsing -MaximumRedirection 10
-        if (Test-Path $VNCFile) {
-            Write-Host "VNC Server downloaded successfully!"
-            $success = $true
-        } else {
-            throw "File not found after download."
-        }
-    } catch {
-        Write-Host "Download failed. Retrying..."
-        Start-Sleep -Seconds 5
-        $retry++
-    }
-}
-if (-not $success) { throw "Failed to download VNC Server after $maxRetries attempts." }
+    runs-on: windows-latest
 
-# ============================
-# 3. INSTALL VNC SILENTLY
-# ============================
-Write-Host "==> Installing VNC Server..."
-Start-Process -FilePath $VNCFile -ArgumentList "/quiet /norestart" -Wait
-Write-Host "VNC Server installed."
-
-# ============================
-# 4. CONFIGURE VNC PASSWORD & START SERVICE
-# ============================
-Write-Host "==> Configuring VNC Server password..."
-$VNCPath = "C:\Program Files\RealVNC\VNC Server\vncpasswd.exe"
-if (Test-Path $VNCPath) {
-    & $VNCPath -service -setpassword $VNCPassword
-    Start-Service -Name "VNCServer"
-    Set-Service -Name "VNCServer" -StartupType Automatic
-    Write-Host "VNC Server configured and running."
-} else {
-    Write-Warning "vncpasswd.exe not found. Make sure VNC Server installed correctly."
-}
-
-Write-Host "==> Setup completed!"
-Write-Host "RDP: $RDPUser / $RDPPassword"
-Write-Host "VNC: $VNCPassword"
+    steps:
+    - name: Download
+      run: Invoke-WebRequest https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip -OutFile ngrok.zip
+    - name: Extract
+      run: Expand-Archive ngrok.zip
+    - name: Auth
+      run: .\ngrok\ngrok.exe authtoken $Env:NGROK_AUTH_TOKEN
+      env:
+        NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
+    - name: Enable TS
+      run: Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server'-name "fDenyTSConnections" -Value 0
+    - run: Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+    - run: Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -name "UserAuthentication" -Value 1
+    - run: Set-LocalUser -Name "runneradmin" -Password (ConvertTo-SecureString -AsPlainText "P@ssw0rd!" -Force)
+    - name: Create Tunnel
+      run: .\ngrok\ngrok.exe tcp 3389
