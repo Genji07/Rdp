@@ -8,20 +8,20 @@ jobs:
     runs-on: windows-latest
 
     steps:
-    - name: Enable RDP
+    - name: Setup RDP User
+      shell: powershell
       run: |
+        net user runneradmin /active:yes
+        net user runneradmin "Password123!"
         Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server" -Name "FdenyTSConnections" -Value 0
         Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-        net user github /add
-        net localgroup administrators github /add
-        net user github "123456"
 
-    - name: Display RDP Instructions
+    - name: Show RDP Info
+      shell: powershell
       run: |
         $ip = (Invoke-WebRequest -uri "https://api.ipify.org").Content
-        echo "======================================" 
-        echo " RDP Details"
-        echo " IP: $ip"
-        echo " Username: github"
-        echo " Password: 123456"
-        echo "======================================"
+        Write-Host "===================================="
+        Write-Host " RDP ADDRESS: $ip"
+        Write-Host " USERNAME   : runneradmin"
+        Write-Host " PASSWORD   : Password123!"
+        Write-Host "===================================="
