@@ -8,7 +8,7 @@ jobs:
     runs-on: windows-2022
 
     steps:
-    - name: Download VNC (REALVNC)
+    - name: Download VNC
       shell: powershell
       run: |
         Invoke-WebRequest -Uri "https://github.com/RealVNC/raspi-preview/releases/download/v0.0.1/VNC-Server-6.11.1-Windows.exe" -OutFile "$env:USERPROFILE\vnc.exe"
@@ -18,13 +18,13 @@ jobs:
       run: |
         Start-Process "$env:USERPROFILE\vnc.exe" -ArgumentList "/silent" -Wait
 
-    - name: Enable VNC service
+    - name: Start VNC Service
       shell: powershell
       run: |
         & "C:\Program Files\RealVNC\VNC Server\vncserver.exe" -service install
         & "C:\Program Files\RealVNC\VNC Server\vncserver.exe" -service start
 
-    - name: Set password
+    - name: Set VNC Password
       shell: powershell
       run: |
         $pass = "123456"
@@ -35,8 +35,8 @@ jobs:
       run: |
         $ip = (Invoke-WebRequest -uri "https://api.ipify.org").Content
         Write-Host "===================================="
-        Write-Host " VNC CONNECT INFO"
-        Write-Host " IP        : $ip"
-        Write-Host " PORT      : 5900"
-        Write-Host " PASSWORD  : 123456"
+        Write-Host " VNC READY"
+        Write-Host " IP       : $ip"
+        Write-Host " PORT     : 5900"
+        Write-Host " PASSWORD : 123456"
         Write-Host "===================================="
