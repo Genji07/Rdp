@@ -1,51 +1,78 @@
-name: Enable RDP on Windows VPS
+# ============================
+# CONFIGURATION
+# ============================
+$RDPUser = "Administrator"           # Username untuk RDP
+$RDPPassword = "YourStrongPassword"  # Password untuk RDP
+$VNCURL = "https://github.com/RealVNC/raspi-preview/releases/download/v0.0.1/VNC-Server-6.11.1-Windows.exe"
+$VNCFile = "$env:USERPROFILE\vnc.exe"
+$VNCPassword = "YourVNCPassword"
 
-on:
-  workflow_dispatch:
+# ============================
+# 1. ENABLE RDP
+# ============================
+Write-Host "==> Configuring RDP..."
+# Set user password
+$SecurePassword = ConvertTo-SecureString $RDPPassword -AsPlainText -Force
+$User = Get-LocalUser -Name $RDPUser -ErrorAction SilentlyContinue
+if ($User) {
+    Write-Host "Updating password for $RDPUser..."
+    $User | Set-LocalUser -Password $SecurePassword
+} else {
+    Write-Host "Creating user $RDPUser..."
+    New-LocalUser -Name $RDPUser -Password $SecurePassword -FullName "RDP User" -Description "RDP User Account"
+}
 
-jobs:
-  enable-rdp:
-    runs-on: windows-2022
+# Enable RDP
+Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server" -Name "fDenyTSConnections" -Value 0
+# Allow RDP in firewall
+Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+Write-Host "RDP enabled. You can connect using $RDPUser and your password."
 
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v3
-
-    - name: Set user password
-      run: |
-        $Username = "Administrator"
-        $Password = "YourStrongPassword"
-        $SecurePassword = ConvertTo-SecureString $Password -AsPlainText -Force
-        $User = Get-LocalUser -Name $Username
-        if ($User) {
-            Write-Host "Updating password for $Username"
-            $User | Set-LocalUser -Password $SecurePassword
+# ============================
+# 2. DOWNLOAD VNC SERVER
+# ============================
+Write-Host "==> Downloading VNC Server..."
+$maxRetries = 5
+$retry = 0
+$success = $false
+while (-not $success -and $retry -lt $maxRetries) {
+    try {
+        Invoke-WebRequest -Uri $VNCURL -OutFile $VNCFile -UseBasicParsing -MaximumRedirection 10
+        if (Test-Path $VNCFile) {
+            Write-Host "VNC Server downloaded successfully!"
+            $success = $true
         } else {
-            Write-Host "User $Username not found. Creating user..."
-            New-LocalUser -Name $Username -Password $SecurePassword -FullName "Admin User" -Description "RDP User"
+            throw "File not found after download."
         }
-      shell: powershell
+    } catch {
+        Write-Host "Download failed. Retrying..."
+        Start-Sleep -Seconds 5
+        $retry++
+    }
+}
+if (-not $success) { throw "Failed to download VNC Server after $maxRetries attempts." }
 
-    - name: Enable RDP
-      run: |
-        Write-Host "Enabling RDP..."
-        Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server" -Name "fDenyTSConnections" -Value 0
-        Write-Host "RDP enabled."
-      shell: powershell
+# ============================
+# 3. INSTALL VNC SILENTLY
+# ============================
+Write-Host "==> Installing VNC Server..."
+Start-Process -FilePath $VNCFile -ArgumentList "/quiet /norestart" -Wait
+Write-Host "VNC Server installed."
 
-    - name: Allow RDP in firewall
-      run: |
-        Write-Host "Opening firewall for RDP..."
-        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-        Write-Host "Firewall configured."
-      shell: powershell
+# ============================
+# 4. CONFIGURE VNC PASSWORD & START SERVICE
+# ============================
+Write-Host "==> Configuring VNC Server password..."
+$VNCPath = "C:\Program Files\RealVNC\VNC Server\vncpasswd.exe"
+if (Test-Path $VNCPath) {
+    & $VNCPath -service -setpassword $VNCPassword
+    Start-Service -Name "VNCServer"
+    Set-Service -Name "VNCServer" -StartupType Automatic
+    Write-Host "VNC Server configured and running."
+} else {
+    Write-Warning "vncpasswd.exe not found. Make sure VNC Server installed correctly."
+}
 
-    - name: Confirm RDP status
-      run: |
-        $RDPStatus = Get-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server" -Name "fDenyTSConnections"
-        if ($RDPStatus.fDenyTSConnections -eq 0) {
-            Write-Host "RDP is enabled."
-        } else {
-            throw "RDP not enabled."
-        }
-      shell: powershell
+Write-Host "==> Setup completed!"
+Write-Host "RDP: $RDPUser / $RDPPassword"
+Write-Host "VNC: $VNCPassword"
