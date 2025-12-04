@@ -1,0 +1,41 @@
+name: Windows 2022 VNC Desktop
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-2022
+
+    steps:
+    - name: Install TightVNC
+      shell: powershell
+      run: |
+        Invoke-WebRequest -Uri "https://download.tigervnc.org/tigervnc/stable/1.13.1/windows/tigervnc-1.13.1.exe" -OutFile "$env:USERPROFILE\vnc.exe"
+        Start-Process "$env:USERPROFILE\vnc.exe" -ArgumentList "/S" -Wait
+
+    - name: Set VNC password
+      shell: powershell
+      run: |
+        $password = "123456"
+        $hex = ([System.Text.Encoding]::ASCII.GetBytes($password) | ForEach-Object { "{0:X2}" -f $_ }) -join ""
+        Set-Content -Path "C:\Program Files\TigerVNC\vncpasswd.txt" -Value $hex
+
+    - name: Start VNC server
+      shell: powershell
+      run: |
+        Start-Process "C:\Program Files\TigerVNC\winvnc.exe"
+        Start-Sleep -Seconds 5
+
+    - name: Show Connection Info
+      shell: powershell
+      run: |
+        $ip = (Invoke-WebRequest -uri "https://api.ipify.org").Content
+        Write-Host "===================================="
+        Write-Host " VNC READY!"
+        Write-Host " Connect using VNC Viewer"
+        Write-Host ""
+        Write-Host " IP        : $ip"
+        Write-Host " PORT      : 5900"
+        Write-Host " PASSWORD  : 123456"
+        Write-Host "===================================="
