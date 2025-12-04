@@ -1,10 +1,10 @@
-name: Download VNC Server
+name: Install and Configure VNC Server on Windows VPS
 
 on:
   workflow_dispatch:
 
 jobs:
-  download-vnc:
+  install-configure-vnc:
     runs-on: windows-2022
 
     steps:
@@ -15,30 +15,36 @@ jobs:
       run: |
         echo "VNC_URL=https://github.com/RealVNC/raspi-preview/releases/download/v0.0.1/VNC-Server-6.11.1-Windows.exe" >> $GITHUB_ENV
         echo "VNC_FILE=$env:USERPROFILE\\vnc.exe" >> $GITHUB_ENV
+        echo "VNC_PASSWORD=YourStrongPassword" >> $GITHUB_ENV
       shell: powershell
 
-    - name: Download VNC Server with PowerShell (follow redirects)
+    - name: Download VNC Server
       run: |
-        $maxRetries = 5
-        $retry = 0
-        $success = $false
+        Write-Host "Downloading VNC Server..."
+        Invoke-WebRequest -Uri $env:VNC_URL -OutFile $env:VNC_FILE -UseBasicParsing -MaximumRedirection 10
+        if (-not (Test-Path $env:VNC_FILE)) { throw "Failed to download VNC Server." }
+        Write-Host "Download completed: $env:VNC_FILE"
+      shell: powershell
 
-        while (-not $success -and $retry -lt $maxRetries) {
-            try {
-                Write-Host "Downloading VNC Server, attempt $($retry+1)..."
-                Invoke-WebRequest -Uri $env:VNC_URL -OutFile $env:VNC_FILE -UseBasicParsing -MaximumRedirection 10
-                if (Test-Path $env:VNC_FILE) {
-                    Write-Host "Download successful!"
-                    $success = $true
-                } else {
-                    throw "File not found after download."
-                }
-            } catch {
-                Write-Host "Download failed. Retrying..."
-                Start-Sleep -Seconds 5
-                $retry++
-            }
-        }
+    - name: Install VNC Server silently
+      run: |
+        Write-Host "Installing VNC Server silently..."
+        Start-Process -FilePath $env:VNC_FILE -ArgumentList "/quiet /norestart" -Wait
+        Write-Host "Installation completed."
+      shell: powershell
 
-        if (-not $success) { throw "Failed to download VNC Server after $maxRetries attempts." }
+    - name: Set VNC Password
+      run: |
+        Write-Host "Configuring VNC password..."
+        # Enable password authentication
+        & "C:\Program Files\RealVNC\VNC Server\vncpasswd.exe" -service -setpassword $env:VNC_PASSWORD
+        Write-Host "VNC password set successfully."
+      shell: powershell
+
+    - name: Enable VNC Server service
+      run: |
+        Write-Host "Starting VNC Server service..."
+        Start-Service -Name "VNCServer"
+        Set-Service -Name "VNCServer" -StartupType Automatic
+        Write-Host "VNC Server service is running."
       shell: powershell
