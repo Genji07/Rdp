@@ -1,33 +1,27 @@
-name: Windows 10 RDP
+name: Windows RDP
 
 on:
   workflow_dispatch:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
 
     steps:
-      - name: Update
-        run: sudo apt update
+    - name: Enable RDP
+      run: |
+        Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server" -Name "FdenyTSConnections" -Value 0
+        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+        net user github /add
+        net localgroup administrators github /add
+        net user github "123456"
 
-      - name: Install Docker
-        run: |
-          sudo apt install docker.io -y
-          sudo systemctl start docker
-          sudo systemctl enable docker
-
-      - name: Run Windows 10 Container
-        run: |
-          sudo docker run -d --privileged --name win10 -p 3389:3389 dockurr/windows:10
-
-      - name: Show RDP Login
-        run: |
-          echo "================================="
-          echo " RDP RUNNING!"
-          echo "================================="
-          echo "IP Address:"
-          curl -s ifconfig.me
-          echo ""
-          echo "Username: administrator"
-          echo "Password default: dockurr"
+    - name: Display RDP Instructions
+      run: |
+        $ip = (Invoke-WebRequest -uri "https://api.ipify.org").Content
+        echo "======================================" 
+        echo " RDP Details"
+        echo " IP: $ip"
+        echo " Username: github"
+        echo " Password: 123456"
+        echo "======================================"
