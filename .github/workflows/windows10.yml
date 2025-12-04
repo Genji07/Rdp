@@ -1,0 +1,33 @@
+name: Windows 10 RDP
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Update
+        run: sudo apt update
+
+      - name: Install Docker
+        run: |
+          sudo apt install docker.io -y
+          sudo systemctl start docker
+          sudo systemctl enable docker
+
+      - name: Run Windows 10 Container
+        run: |
+          sudo docker run -d --privileged --name win10 -p 3389:3389 dockurr/windows:10
+
+      - name: Show RDP Login
+        run: |
+          echo "================================="
+          echo " RDP RUNNING!"
+          echo "================================="
+          echo "IP Address:"
+          curl -s ifconfig.me
+          echo ""
+          echo "Username: administrator"
+          echo "Password default: dockurr"
