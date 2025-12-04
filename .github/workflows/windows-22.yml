@@ -1,38 +1,44 @@
-﻿2025-12-04T07:40:08.3039987Z ##[group]Run $maxRetries = 3
-$maxRetries = 3
-$retry = 0
-$success = $false
+name: Download VNC Server
 
-while (-not $success -and $retry -lt $maxRetries) {
-    try {
-        Write-Host "Downloading VNC Server, attempt $($retry+1)..."
-        curl -L $env:VNC_URL -o $env:VNC_FILE --retry 3 --retry-delay 5
-        if (Test-Path $env:VNC_FILE) {
-            Write-Host "Download successful!"
-            $success = $true
-        } else {
-            throw "File not found after download."
+on:
+  workflow_dispatch:
+
+jobs:
+  download-vnc:
+    runs-on: windows-2022
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Set variables
+      run: |
+        echo "VNC_URL=https://github.com/RealVNC/raspi-preview/releases/download/v0.0.1/VNC-Server-6.11.1-Windows.exe" >> $GITHUB_ENV
+        echo "VNC_FILE=$env:USERPROFILE\\vnc.exe" >> $GITHUB_ENV
+      shell: powershell
+
+    - name: Download VNC Server with PowerShell (follow redirects)
+      run: |
+        $maxRetries = 5
+        $retry = 0
+        $success = $false
+
+        while (-not $success -and $retry -lt $maxRetries) {
+            try {
+                Write-Host "Downloading VNC Server, attempt $($retry+1)..."
+                Invoke-WebRequest -Uri $env:VNC_URL -OutFile $env:VNC_FILE -UseBasicParsing -MaximumRedirection 10
+                if (Test-Path $env:VNC_FILE) {
+                    Write-Host "Download successful!"
+                    $success = $true
+                } else {
+                    throw "File not found after download."
+                }
+            } catch {
+                Write-Host "Download failed. Retrying..."
+                Start-Sleep -Seconds 5
+                $retry++
+            }
         }
-    } catch {
-        Write-Host "Download failed. Retrying..."
-        Start-Sleep -Seconds 5
-        $retry++
-    }
-}
 
-if (-not $success) { throw "Failed to download VNC Server after $maxRetries attempts." }
-shell: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.EXE -command ". '{0}'"
-Downloading VNC Server, attempt 1...
-Download failed. Retrying...
-Downloading VNC Server, attempt 2...
-Download failed. Retrying...
-Downloading VNC Server, attempt 3...
-Download failed. Retrying...
-Failed to download VNC Server after 3 attempts.
-At D:\a\_temp\ae424ae4-5382-4acc-9eae-7f55e7e4e5be.ps1:23 char:22
-+ ... $success) { throw "Failed to download VNC Server after $maxRetries at ...
-+                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    + CategoryInfo          : OperationStopped: (Failed to downl...ter 3 attempts.:String) [], RuntimeException
-    + FullyQualifiedErrorId : Failed to download VNC Server after 3 attempts.
- 
-Process completed with exit code 1.
+        if (-not $success) { throw "Failed to download VNC Server after $maxRetries attempts." }
+      shell: powershell
