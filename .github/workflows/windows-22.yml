@@ -1,42 +1,39 @@
-name: Windows 2022 VNC Desktop FIXED
+name: Download VNC Server
 
 on:
-  workflow_dispatch:
+  workflow_dispatch:  # Trigger manual
+  push:
+    branches:
+      - main
 
 jobs:
-  build:
+  download-vnc:
     runs-on: windows-2022
 
     steps:
-    - name: Download VNC
-      shell: powershell
-      run: |
-        Invoke-WebRequest -Uri "https://github.com/RealVNC/raspi-preview/releases/download/v0.0.1/VNC-Server-6.11.1-Windows.exe" -OutFile "$env:USERPROFILE\vnc.exe"
+    - name: Checkout repository
+      uses: actions/checkout@v3
 
-    - name: Install VNC
-      shell: powershell
+    - name: Set variables
       run: |
-        Start-Process "$env:USERPROFILE\vnc.exe" -ArgumentList "/silent" -Wait
+        echo "VNC_URL=https://github.com/RealVNC/raspi-preview/releases/download/v0.0.1/VNC-Server-6.11.1-Windows.exe" >> $GITHUB_ENV
+        echo "VNC_FILE=$env:USERPROFILE\\vnc.exe" >> $GITHUB_ENV
+      shell: powershell
 
-    - name: Start VNC Service
-      shell: powershell
+    - name: Download VNC Server using Invoke-WebRequest
       run: |
-        & "C:\Program Files\RealVNC\VNC Server\vncserver.exe" -service install
-        & "C:\Program Files\RealVNC\VNC Server\vncserver.exe" -service start
-
-    - name: Set VNC Password
+        $maxRetries = 3
+        $retry = 0
+        $success = $false
+        while (-not $success -and $retry -lt $maxRetries) {
+            try {
+                Invoke-WebRequest -Uri $env:VNC_URL -OutFile $env:VNC_FILE -UseBasicParsing
+                $success = $true
+            } catch {
+                Write-Host "Download failed. Retry $($retry+1)/$maxRetries..."
+                Start-Sleep -Seconds 5
+                $retry++
+            }
+        }
+        if (-not $success) { throw "Failed to download VNC Server after $maxRetries attempts." }
       shell: powershell
-      run: |
-        $pass = "123456"
-        & "C:\Program Files\RealVNC\VNC Server\vncpasswd.exe" -set $pass
-
-    - name: Show Connection Info
-      shell: powershell
-      run: |
-        $ip = (Invoke-WebRequest -uri "https://api.ipify.org").Content
-        Write-Host "===================================="
-        Write-Host " VNC READY"
-        Write-Host " IP       : $ip"
-        Write-Host " PORT     : 5900"
-        Write-Host " PASSWORD : 123456"
-        Write-Host "===================================="
